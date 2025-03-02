@@ -1,0 +1,155 @@
+{% extends 'base.html' %}
+
+{% block title %}Magenta NST{% endblock %}
+
+{% block content %}
+    <div class="container mt-5">
+        <div class="row">
+            <!-- Left Side: Upload Form -->
+            <div class="col-md-6 d-flex flex-column align-items-center">
+                <h3>Select Images</h3>
+                <form id="uploadForm" enctype="multipart/form-data" class="p-4 border rounded shadow w-100" style="margin-top:70px;">
+                    <div class="mb-3">
+                        <label for="contentImage" class="form-label">Upload Content Image</label>
+                        <input type="file" class="form-control" id="contentImage" name="content_image" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="styleImage" class="form-label">Upload Style Image</label>
+                        <input type="file" class="form-control" id="styleImage" name="style_image" required>
+                    </div>
+                    <button type="submit" class="btn btn-gradient w-100">Stylize</button>
+                </form>
+            </div>
+
+            <!-- Right Side: Output Image Section -->
+            <div class="col-md-6 d-flex flex-column align-items-center">
+                <h3>Output Image</h3>
+                
+                <!-- Output Box -->
+                <div id="outputContainer" class="p-4 border rounded shadow w-100 d-flex justify-content-center align-items-center position-relative" style="height: 400px;">
+                    
+                    <!-- Placeholder text -->
+                    <p id="placeholderText" class="text-muted">Stylized image will appear here</p>
+
+                    <!-- Spinner Animation -->
+                    <div id="loadingSpinner" class="spinner-border text-primary position-absolute" role="status" style="display: none;">
+                        <span class="visually-hidden">Processing...</span>
+                    </div>
+
+                    <!-- Output Image -->
+                    <img id="outputImage" src="" class="img-fluid rounded shadow" 
+                         style="display: none; max-width: 100%; height: 100%;" />
+                </div>
+
+                <!-- Download Button -->
+                <button id="download-button" class="btn btn-download mt-3" style="display: none;">Download Image</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.getElementById("uploadForm").onsubmit = async function(event) {
+            event.preventDefault();
+            let formData = new FormData(this);
+
+            let outputImage = document.getElementById("outputImage");
+            let loadingSpinner = document.getElementById("loadingSpinner");
+            let placeholderText = document.getElementById("placeholderText");
+            let downloadButton = document.getElementById("download-button");
+
+            // Show spinner and hide previous output
+            loadingSpinner.style.display = "block";
+            outputImage.style.display = "none";
+            placeholderText.style.display = "none";
+            downloadButton.style.display = "none"; // Hide download button until image appears
+
+            let response = await fetch("/magenta-style-transfer", {
+                method: "POST",
+                body: formData
+            });
+
+            let result = await response.json();
+
+            // Hide spinner
+            loadingSpinner.style.display = "none";
+
+            if (result.image_url) {
+                outputImage.src = result.image_url;
+                outputImage.style.display = "block";
+                downloadButton.style.display = "block"; // Show download button
+            } else {
+                placeholderText.style.display = "block";
+                alert("Style transfer failed.");
+            }
+        };
+
+        document.getElementById("download-button").addEventListener("click", function() {
+            let outputImage = document.getElementById("outputImage");
+            let link = document.createElement("a");
+            link.href = outputImage.src;
+            link.download = "stylized_image.png";
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        });
+    </script>
+
+    <style>
+        /* Gradient Animation for Stylize Button */
+        .btn-gradient {
+            background: linear-gradient(45deg, #ff00ff, #6200ea, #03a9f4);
+            background-size: 300% 300%;
+            color: white;
+            border: none;
+            font-size: 1rem;
+            padding: 10px;
+            border-radius: 8px;
+            font-weight: bold;
+            text-transform: uppercase;
+            transition: 0.3s;
+            animation: gradientMove 4s infinite linear; /* Slower animation */
+        }
+
+        /* Button Hover Effect */
+        .btn-gradient:hover {
+            filter: brightness(1.2);
+            box-shadow: 0px 0px 10px rgba(255, 0, 255, 0.7);
+        }
+
+        /* Gradient Animation Keyframes */
+        @keyframes gradientMove {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+
+        /* Green Gradient Animation for Download Button */
+        .btn-download {
+            background: linear-gradient(45deg, #4CAF50, #2E7D32, #66BB6A);
+            background-size: 300% 300%;
+            color: white;
+            border: none;
+            font-size: 1rem;
+            padding: 10px;
+            border-radius: 8px;
+            font-weight: bold;
+            text-transform: uppercase;
+            transition: 0.3s;
+            animation: greenGradientMove 4s infinite linear;
+        }
+
+        /* Button Hover Effect */
+        .btn-download:hover {
+            filter: brightness(1.2);
+            box-shadow: 0px 0px 10px rgba(76, 175, 80, 0.7);
+        }
+
+        /* Green Gradient Animation Keyframes */
+        @keyframes greenGradientMove {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+    </style>
+
+{% endblock %}

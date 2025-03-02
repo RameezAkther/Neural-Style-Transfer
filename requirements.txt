@@ -1,0 +1,11 @@
+torch
+torchvision
+torchaudio
+opencv-python
+matplotlib
+flask
+flask_socketio
+tensorflow
+tensorflow-hub
+
+--index-url https://download.pytorch.org/whl/cu118

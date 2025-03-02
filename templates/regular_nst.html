@@ -1,0 +1,216 @@
+{% extends 'base.html' %}
+
+{% block title %}Regular NST{% endblock %}
+
+{% block content %}
+<style>
+    .image-container {
+        width: 100%;
+        max-height: 400px;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        position: relative;
+        border-radius: 10px;
+    }
+    img {
+        max-width: 100%;
+        max-height: 100%;
+        border-radius: 10px;
+        display: none;
+    }
+    .hidden {
+        display: none;
+    }
+</style>
+<div class="container mt-5">
+    <div class="row">
+        <!-- Left Side: Upload Form -->
+        <div class="col-md-6 d-flex flex-column align-items-center">
+            <form id="upload-form" enctype="multipart/form-data" class="p-4 border rounded shadow w-100">
+                <div class="mb-3">
+                    <label for="content_image" class="form-label">Upload Content Image</label>
+                    <input type="file" class="form-control" id="content_image" name="content_img" required>
+                </div>
+                <div class="mb-3">
+                    <label for="style_image" class="form-label">Upload Style Image</label>
+                    <input type="file" class="form-control" id="style_image" name="style_img" required>
+                </div>
+                
+                <!-- Sliders for Content Weight and Style Weight -->
+                <div class="mb-3">
+                    <label for="content_weight" class="form-label">Content Weight: <span id="content_weight_value">1e0</span></label>
+                    <input type="range" class="form-range" id="content_weight" name="content_weight" min="0" max="8" step="1" value="0">
+                </div>
+                <div class="mb-3">
+                    <label for="style_weight" class="form-label">Style Weight: <span id="style_weight_value">1e1</span></label>
+                    <input type="range" class="form-range" id="style_weight" name="style_weight" min="0" max="5" step="1" value="0">
+                </div>
+                <div class="mb-3">
+                    <label for="num_iterations" class="form-label">Number of Iterations</label>
+                    <input type="number" class="form-control" id="num_iterations" name="num_iterations" value="500">
+                </div>
+                
+                <!-- Preserve Color Switch -->
+                <div class="form-check form-switch mb-3">
+                    <input class="form-check-input" type="checkbox" id="preserve_color" name="preserve_color">
+                    <label class="form-check-label" for="preserve_color">Preserve Color</label>
+                </div>
+
+                <button type="submit" class="btn btn-gradient w-100">Start Style Transfer</button>
+            </form>
+        </div>
+        
+        <!-- Right Side: Output Image Section -->
+        <div class="col-md-6 d-flex flex-column align-items-center">
+            <h4>Stylized Image</h4>
+
+            <div id="outputContainer" class="p-4 border rounded shadow w-100 d-flex justify-content-center align-items-center position-relative" style="height: 400px;">
+                <p id="placeholderText" class="text-muted">Stylized image will appear here</p>
+
+                <div id="loadingSpinner" class="spinner-border text-primary position-absolute" role="status" style="display: none;">
+                    <span class="visually-hidden">Processing...</span>
+                </div>
+
+                <img id="styled-image" src="" class="img-fluid rounded shadow" style="display: none; max-width: 100%; height: 350px;" />
+            </div>
+            <button id="download-button" class="btn btn-download mt-3" style="display: none;">Download Image</button>
+        </div>
+    </div>
+</div>
+<script src="https://cdn.socket.io/4.0.1/socket.io.min.js"></script>
+
+<script>
+    const contentWeights = ["1e0", "1e1", "1e2", "1e3", "1e4", "5e0", "5e1", "5e2", "5e3"];
+    const styleWeights = ["1e1", "1e2", "1e3", "1e4", "1e5", "1e6"];
+
+    document.getElementById("content_weight").addEventListener("input", function() {
+        document.getElementById("content_weight_value").textContent = contentWeights[this.value];
+    });
+    document.getElementById("style_weight").addEventListener("input", function() {
+        document.getElementById("style_weight_value").textContent = styleWeights[this.value];
+    });
+
+    document.getElementById("upload-form").onsubmit = function(event) {
+        event.preventDefault();
+        let formData = new FormData(document.getElementById("upload-form"));
+        
+        formData.set("content_weight", contentWeights[document.getElementById("content_weight").value]);
+        formData.set("style_weight", styleWeights[document.getElementById("style_weight").value]);
+        formData.set("preserve_color", document.getElementById("preserve_color").checked ? "true" : "false");
+        
+        let styledImage = document.getElementById("styled-image");
+        let loadingSpinner = document.getElementById("loadingSpinner");
+        let placeholderText = document.getElementById("placeholderText");
+        let downloadButton = document.getElementById("download-button");
+
+        loadingSpinner.style.display = "block";
+        styledImage.style.display = "none";
+        placeholderText.style.display = "none";
+        downloadButton.style.display = "none";
+
+        fetch('/upload', {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.session_id) {
+                listenForUpdates(data.session_id);
+            } else {
+                alert("Error: " + data.error);
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert("Failed to send request.");
+        });
+    };
+
+    function listenForUpdates(session_id) {
+        var socket = io();
+        socket.on('image_update', function(data) {
+            if (data.session_id === session_id) {
+                let styledImage = document.getElementById("styled-image");
+                styledImage.src = data.image_url + "?t=" + new Date().getTime();
+                styledImage.style.display = "block";
+                document.getElementById("loadingSpinner").style.display = "none";
+                document.getElementById("download-button").style.display = "block";
+            }
+        });
+
+        socket.on('final_image', function(data) {
+            if (data.session_id === session_id) {
+                document.getElementById("styled-image").src = data.image_url;
+            }
+        });
+    }
+
+    document.getElementById("download-button").addEventListener("click", function() {
+        let styledImage = document.getElementById("styled-image");
+        let link = document.createElement("a");
+        link.href = styledImage.src;
+        link.download = "stylized_image.png";
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    });
+</script>
+<style>
+    /* Gradient Animation for Stylize Button */
+    .btn-gradient {
+        background: linear-gradient(45deg, #ff00ff, #6200ea, #03a9f4);
+        background-size: 300% 300%;
+        color: white;
+        border: none;
+        font-size: 1rem;
+        padding: 7px;
+        border-radius: 8px;
+        font-weight: bold;
+        text-transform: uppercase;
+        transition: 0.3s;
+        animation: gradientMove 4s infinite linear; /* Slower animation */
+    }
+
+    /* Button Hover Effect */
+    .btn-gradient:hover {
+        filter: brightness(1.2);
+        box-shadow: 0px 0px 10px rgba(255, 0, 255, 0.7);
+    }
+
+    /* Gradient Animation Keyframes */
+    @keyframes gradientMove {
+        0% { background-position: 0% 50%; }
+        50% { background-position: 100% 50%; }
+        100% { background-position: 0% 50%; }
+    }
+
+    /* Green Gradient Animation for Download Button */
+    .btn-download {
+        background: linear-gradient(45deg, #4CAF50, #2E7D32, #66BB6A);
+        background-size: 300% 300%;
+        color: white;
+        border: none;
+        font-size: 1rem;
+        padding: 10px;
+        border-radius: 8px;
+        font-weight: bold;
+        text-transform: uppercase;
+        transition: 0.3s;
+        animation: greenGradientMove 4s infinite linear;
+    }
+
+    /* Button Hover Effect */
+    .btn-download:hover {
+        filter: brightness(1.2);
+        box-shadow: 0px 0px 10px rgba(76, 175, 80, 0.7);
+    }
+
+    /* Green Gradient Animation Keyframes */
+    @keyframes greenGradientMove {
+        0% { background-position: 0% 50%; }
+        50% { background-position: 100% 50%; }
+        100% { background-position: 0% 50%; }
+    }
+</style>
+{% endblock %}
